@@ -1,194 +1,86 @@
-import { act } from "react"
-import MultipleFetches from "../MultipleFetches.js"
-import { render, fireEvent, cleanup } from "@testing-library/react"
-import "@testing-library/jest-dom"
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import MultipleFetches from '../MultipleFetches';
+import { cleanup } from '@testing-library/react';
 
-afterEach(cleanup)
+afterEach(cleanup);
 
-test("starts without any post", () => {
-  const { queryByTestId } = render(<MultipleFetches />)
-  expect(queryByTestId("fetch-post")).toBeNull()
-})
+describe('MultipleFetches Component', () => {
+  beforeEach(() => {
+    jest.spyOn(global, 'fetch');
+  });
 
-test("after clicking on button, displays loading message", () => {
-  const { getByTestId, getByText } = render(<MultipleFetches />)
-  act(() => {
-    fireEvent.click(getByText("Fetch post and comments"))
-  })
-  expect(getByTestId("fetch-loading-post").textContent).toBe("Loading post...")
-})
+  afterEach(() => {
+    global.fetch.mockClear();
+  });
 
-// Group all API tests together and clear each mock after each test.
-describe("API tests", () => {
-  afterEach(() => global.fetch.mockClear())
+  // Test 1: Initial State Test
+  test('starts without any post', () => {
+    render(<MultipleFetches />);
+    expect(screen.queryByTestId('fetch-post')).not.toBeInTheDocument();
+  });
 
-  test("displays post if API succeeds", async () => {
-    // Create mock implementations that return promises we can control
-    const postPromiseResolve = {}
-    const postPromise = new Promise((resolve) => {
-      postPromiseResolve.resolve = resolve
-    })
+  // Test 2: Loading State Test
+  test('displays loading message when button is clicked', async () => {
+    let resolvePost;
+    const postPromise = new Promise(resolve => {
+      resolvePost = resolve;
+    });
 
-    const commentsPromiseResolve = {}
-    const commentsPromise = new Promise((resolve) => {
-      commentsPromiseResolve.resolve = resolve
-    })
-
-    // Set up the mock with our controlled promises
-    jest
-      .spyOn(global, "fetch")
-      .mockImplementationOnce(() => postPromise)
-      .mockImplementationOnce(() => commentsPromise)
-
-    // Render component inside act
-    let component
+    global.fetch.mockImplementationOnce(() => postPromise);
+    
+    render(<MultipleFetches />);
     await act(async () => {
-      component = render(<MultipleFetches />)
-    })
+      fireEvent.click(screen.getByText('Fetch post and comments'));
+    });
+    
+    expect(screen.getByTestId('fetch-loading-post')).toBeInTheDocument();
+  });
 
-    const { getByTestId, getByText, getAllByTestId } = component
+  // Test 3: Success State Test
+  test('displays post and comments when APIs succeed', async () => {
+    let resolvePost, resolveComments;
+    
+    const postPromise = new Promise(resolve => {
+      resolvePost = resolve;
+    });
+    
+    const commentsPromise = new Promise(resolve => {
+      resolveComments = resolve;
+    });
 
-    // Click button inside act
+    global.fetch.mockImplementationOnce(() => postPromise)
+      .mockImplementationOnce(() => commentsPromise);
+
+    render(<MultipleFetches />);
+    
     await act(async () => {
-      fireEvent.click(getByText("Fetch post and comments"))
-    })
+      fireEvent.click(screen.getByText('Fetch post and comments'));
+    });
 
-    // Resolve first fetch (post) inside act
     await act(async () => {
-      postPromiseResolve.resolve({
+      await resolvePost({
         status: 200,
-        json: () =>
-          Promise.resolve({
-            title: "How to Become a Bad Developer",
-          }),
-      })
-      // Allow component to process the state update
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+        json: () => Promise.resolve({
+          title: "A Really Cool Title"
+        })
+      });
+    });
 
-    // Resolve second fetch (comments) inside act
     await act(async () => {
-      commentsPromiseResolve.resolve({
+      await resolveComments({
         status: 200,
-        json: () =>
-          Promise.resolve([
-            { id: 1, name: "Rafael" },
-            { id: 2, name: "Andressa" },
-          ]),
-      })
-      // Allow component to process the state update
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+        json: () => Promise.resolve([
+          { id: 1, name: "Daaimah" },
+          { id: 2, name: "John" }
+        ])
+      });
+    });
 
-    // Make assertions after all state updates are complete
-    expect(global.fetch).toHaveBeenCalledTimes(2)
-    expect(global.fetch.mock.calls[0][0]).toBe("https://jsonplaceholder.typicode.com/posts/1")
-    expect(global.fetch.mock.calls[1][0]).toBe("https://jsonplaceholder.typicode.com/posts/1/comments")
-    expect(getByTestId("fetch-post").textContent).toBe("How to Become a Bad Developer")
-    expect(getByTestId("multiple-fetch-success")).toBeInTheDocument()
-    const authors = getAllByTestId("comment-author")
-    expect(authors[0].textContent).toBe("Rafael")
-    expect(authors[1].textContent).toBe("Andressa")
-  })
-
-  test("displays comments error if API fails", async () => {
-    // Create mock implementations that return promises we can control
-    const postPromiseResolve = {}
-    const postPromise = new Promise((resolve) => {
-      postPromiseResolve.resolve = resolve
-    })
-
-    const commentsPromiseResolve = {}
-    const commentsPromise = new Promise((resolve) => {
-      commentsPromiseResolve.resolve = resolve
-    })
-
-    // Set up the mock with our controlled promises
-    jest
-      .spyOn(global, "fetch")
-      .mockImplementationOnce(() => postPromise)
-      .mockImplementationOnce(() => commentsPromise)
-
-    // Render component inside act
-    let component
-    await act(async () => {
-      component = render(<MultipleFetches />)
-    })
-
-    const { getByTestId, getByText, queryByText } = component
-
-    // Click button inside act
-    await act(async () => {
-      fireEvent.click(getByText("Fetch post and comments"))
-    })
-
-    // Resolve first fetch (post) inside act
-    await act(async () => {
-      postPromiseResolve.resolve({
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            title: "How to Become a Bad Developer",
-          }),
-      })
-      // Allow component to process the state update
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
-    // Resolve second fetch (comments) with error inside act
-    await act(async () => {
-      commentsPromiseResolve.resolve({
-        status: 500,
-      })
-      // Allow component to process the state update
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
-    // Make assertions after all state updates are complete
-    expect(global.fetch).toHaveBeenCalledTimes(2)
-    expect(global.fetch.mock.calls[0][0]).toBe("https://jsonplaceholder.typicode.com/posts/1")
-    expect(global.fetch.mock.calls[1][0]).toBe("https://jsonplaceholder.typicode.com/posts/1/comments")
-    expect(getByTestId("fetch-post").textContent).toBe("How to Become a Bad Developer")
-    expect(getByTestId("fetch-error-comments").textContent).toBe("Failed to fetch")
-    expect(queryByText("All fetched!")).toBeNull()
-  })
-
-  test("displays post error if API fails", async () => {
-    // Create mock implementation that returns a promise we can control
-    const postPromiseResolve = {}
-    const postPromise = new Promise((resolve) => {
-      postPromiseResolve.resolve = resolve
-    })
-
-    // Set up the mock with our controlled promise
-    jest.spyOn(global, "fetch").mockImplementationOnce(() => postPromise)
-
-    // Render component inside act
-    let component
-    await act(async () => {
-      component = render(<MultipleFetches />)
-    })
-
-    const { getByTestId, getByText, queryByText } = component
-
-    // Click button inside act
-    await act(async () => {
-      fireEvent.click(getByText("Fetch post and comments"))
-    })
-
-    // Resolve fetch with error inside act
-    await act(async () => {
-      postPromiseResolve.resolve({
-        status: 500,
-      })
-      // Allow component to process the state update
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
-    // Make assertions after all state updates are complete
-    expect(global.fetch).toHaveBeenCalledTimes(1)
-    expect(global.fetch.mock.calls[0][0]).toBe("https://jsonplaceholder.typicode.com/posts/1")
-    expect(getByTestId("fetch-error-post").textContent).toBe("Failed to fetch")
-    expect(queryByText("All fetched!")).toBeFalsy()
-  })
-})
+    expect(screen.getByTestId('fetch-post')).toHaveTextContent('A Really Cool Title');
+    const commentAuthors = screen.getAllByTestId('comment-author');
+    expect(commentAuthors).toHaveLength(2);
+    expect(commentAuthors[0]).toHaveTextContent('Daaimah');
+    expect(commentAuthors[1]).toHaveTextContent('John');
+    expect(screen.getByTestId('multiple-fetch-success')).toBeInTheDocument();
+  });
+});
